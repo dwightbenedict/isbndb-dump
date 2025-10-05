@@ -2,6 +2,7 @@ httpx[http2]
 tenacity
 python-dotenv
 SQLAlchemy
+asyncpg
 orjson
 aiofiles
 aiolimiter
