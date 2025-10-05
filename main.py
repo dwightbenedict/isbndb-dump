@@ -3,26 +3,20 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-import os
 
 import httpx
 from aiolimiter import AsyncLimiter
-from dotenv import load_dotenv
 from tqdm import tqdm
 
 from isbndb.api import fetch_books
 from isbndb.ingest import parse_books, archive_books
 from isbndb.db import Database
+from config import DB_URL, ISBNDB_API_KEY
 
-
-load_dotenv()
-
-API_KEY = os.getenv("API_KEY")
 
 BATCH_SIZE = 1000
 MAX_CALLS_PER_SEC = 10
 MAX_CALLS_PER_DAY = 200_000
-DB_URL = "postgresql+asyncpg://postgres:sudodex@localhost:5432/isbndb"
 
 DOWNLOADS_FOLDER = Path.home() / "Downloads"
 ISBNDB_DUMP_DIR = DOWNLOADS_FOLDER / "isbndb_dump"
@@ -43,9 +37,11 @@ def seconds_until_midnight_utc() -> int:
     return int((tomorrow - now).total_seconds())
 
 
-async def process_batch(db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path) -> bool:
+async def process_batch(
+        db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path
+) -> bool:
     try:
-        data: dict[str, Any] = await fetch_books(client, batch, API_KEY)
+        data: dict[str, Any] = await fetch_books(client, batch, ISBNDB_API_KEY)
     except (httpx.RequestError, httpx.HTTPStatusError) as e:
         logging.warning(f"Batch {batch[0]}–{batch[-1]} failed: {e}")
         return False
@@ -92,7 +88,6 @@ async def main() -> None:
     logging.info("🚀 Starting ISBNdb consumer service...")
 
     db = Database(DB_URL)
-    await db.create_tables()
 
     limiter = AsyncLimiter(MAX_CALLS_PER_SEC, time_period=1)
     await consume_batches(db, limiter, ISBNDB_DUMP_DIR)
