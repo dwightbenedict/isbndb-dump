@@ -1,0 +1,8 @@
+httpx[http2]
+tenacity
+python-dotenv
+SQLAlchemy
+orjson
+aiofiles
+aiolimiter
+tqdm
