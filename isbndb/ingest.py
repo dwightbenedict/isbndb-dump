@@ -24,7 +24,7 @@ def parse_books(data: dict[str, Any]) -> list[Book]:
                 synopsis=book.get("synopsis") or "",
                 language=book.get("language") or "",
                 subjects=", ".join(book.get("subjects") or []),
-                edition=book.get("edition") or "",
+                edition=str(book["edition"]) if book.get("edition") else "",
                 isbn=book.get("isbn") or "",
                 isbn10=book.get("isbn10") or "",
                 dewey_decimal=", ".join(book.get("dewey_decimal") or []),
