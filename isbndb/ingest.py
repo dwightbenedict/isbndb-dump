@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime
 from typing import Any
 from pathlib import Path
 import gzip
@@ -16,7 +16,7 @@ def parse_books(data: dict[str, Any]) -> list[Book]:
             long_title=book["title_long"],
             authors=", ".join(book["authors"]),
             publisher=book["publisher"],
-            date_published=date.fromisoformat(book["date_published"]),
+            date_published=book["date_published"],
             synopsis=book["synopsis"],
             language=book["language"],
             subjects=", ".join(book["subjects"]),

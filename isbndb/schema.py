@@ -31,7 +31,7 @@ class Book(Base):
     long_title: Mapped[str] = mapped_column(String, nullable=False)
     authors: Mapped[str] = mapped_column(String, nullable=False)
     publisher: Mapped[str] = mapped_column(String, nullable=False)
-    date_published: Mapped[datetime.date] = mapped_column(Date, nullable=True)
+    date_published: Mapped[str] = mapped_column(String, nullable=True)
     synopsis: Mapped[str] = mapped_column(Text, nullable=True)
     language: Mapped[str] = mapped_column(String, nullable=True)
     subjects: Mapped[str] = mapped_column(String, nullable=True)
