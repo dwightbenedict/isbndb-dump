@@ -13,6 +13,9 @@ def parse_books(data: dict[str, Any]) -> list[Book]:
     books: list[Book] = []
 
     for book in data.get("data", []):
+        dim = book.get("dimensions")
+        dimensions = ", ".join(dim) if isinstance(dim, list) else str(dim or "")
+
         books.append(
             Book(
                 isbn13=book.get("isbn13") or "",
@@ -30,7 +33,7 @@ def parse_books(data: dict[str, Any]) -> list[Book]:
                 dewey_decimal=", ".join(book.get("dewey_decimal") or []),
                 cover=book.get("image_original") or "",
                 binding=book.get("binding") or "",
-                dimensions=book.get("dimensions") or "",
+                dimensions=dimensions,
                 pages=(
                     int(book["pages"])
                     if isinstance(book.get("pages"), (int, str)) and str(book["pages"]).isdigit()
