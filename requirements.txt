@@ -5,5 +5,4 @@ SQLAlchemy
 asyncpg
 orjson
 aiofiles
-aiolimiter
 tqdm
