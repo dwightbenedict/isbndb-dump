@@ -17,7 +17,6 @@ from config import DB_URL, ISBNDB_API_KEY
 BATCH_SIZE = 1000
 MAX_CALLS_PER_SEC = 10
 MAX_CALLS_PER_DAY = 200_000
-MAX_CONCURRENT_REQUESTS = 10  # parallel tasks
 
 DOWNLOADS_FOLDER = Path.home() / "Downloads"
 ISBNDB_DUMP_DIR = DOWNLOADS_FOLDER / "isbndb_dump"
@@ -38,9 +37,7 @@ def seconds_until_midnight_utc() -> int:
     return int((tomorrow - now).total_seconds())
 
 
-async def process_batch(
-        db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path
-) -> bool:
+async def process_batch(db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path) -> bool:
     try:
         data: dict[str, Any] = await fetch_books(client, batch, ISBNDB_API_KEY)
     except (httpx.RequestError, httpx.HTTPStatusError) as e:
@@ -60,15 +57,13 @@ async def process_batch(
 async def consume_batches(db: Database, limiter: AsyncLimiter, out_dir: Path) -> None:
     batch_count = 0
     total_pending = await db.count_pending()
-    processed_count = 0
-    semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 
     async with httpx.AsyncClient(http2=True, timeout=60) as client:
         with tqdm(total=total_pending, desc="Processing ISBNs", unit="isbn") as progress:
-            tasks = []
             while True:
                 batch = await db.fetch_pending(limit=BATCH_SIZE)
                 if not batch:
+                    logging.info("✅ No more pending ISBNs.")
                     break
 
                 if batch_count >= MAX_CALLS_PER_DAY:
@@ -77,34 +72,22 @@ async def consume_batches(db: Database, limiter: AsyncLimiter, out_dir: Path) ->
                     await asyncio.sleep(sleep_time)
                     batch_count = 0
 
-                await semaphore.acquire()
                 async with limiter:
-                    task = asyncio.create_task(process_batch(db, client, batch, out_dir))
-                    task.add_done_callback(lambda t: semaphore.release())
-                    tasks.append(task)
-
+                    success = await process_batch(db, client, batch, out_dir)
                     batch_count += 1
-
-                    def _update_progress(t: asyncio.Task) -> None:
-                        if t.result():
-                            progress.update(BATCH_SIZE)
-
-                    task.add_done_callback(_update_progress)
-
-            if tasks:
-                await asyncio.gather(*tasks)
-
-    logging.info(f"✅ All {processed_count:,} ISBNs processed successfully.")
+                    if success:
+                        progress.update(len(batch))
 
 
 async def main() -> None:
     setup_logging()
-    logging.info("🚀 Starting ISBNdb consumer service...")
+    logging.info("🚀 Starting ISBNdb sequential consumer service...")
 
     db = Database(DB_URL)
     limiter = AsyncLimiter(MAX_CALLS_PER_SEC, time_period=1)
 
     await consume_batches(db, limiter, ISBNDB_DUMP_DIR)
+
     logging.info("🏁 All ISBNs processed. Shutting down gracefully.")
 
 
