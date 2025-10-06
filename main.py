@@ -37,11 +37,9 @@ def seconds_until_midnight_utc() -> int:
     return int((tomorrow - now).total_seconds())
 
 
-async def process_batch(
-        db: Database, limiter: AsyncLimiter, client: httpx.AsyncClient, batch: list[str], out_dir: Path
-) -> bool:
+async def process_batch(db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path) -> bool:
     try:
-        data: dict[str, Any] = await fetch_books(client, batch, ISBNDB_API_KEY, limiter)
+        data: dict[str, Any] = await fetch_books(client, batch, ISBNDB_API_KEY)
     except (httpx.RequestError, httpx.HTTPStatusError) as e:
         logging.warning(f"Batch {batch[0]}–{batch[-1]} failed: {e}")
         return False
@@ -74,10 +72,11 @@ async def consume_batches(db: Database, limiter: AsyncLimiter, out_dir: Path) ->
                     await asyncio.sleep(sleep_time)
                     batch_count = 0
 
-                success = await process_batch(db, limiter, client, batch, out_dir)
-                batch_count += 1
-                if success:
-                    progress.update(len(batch))
+                async with limiter:
+                    success = await process_batch(db, client, batch, out_dir)
+                    batch_count += 1
+                    if success:
+                        progress.update(len(batch))
 
 
 async def main() -> None:
