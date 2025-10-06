@@ -1,10 +1,7 @@
 from enum import StrEnum
 
-from sqlalchemy import (
-    String, Text, Integer, Float, Date
-)
+from sqlalchemy import String, Text, Integer, Float
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-import datetime
 
 
 class Base(DeclarativeBase):
@@ -13,6 +10,7 @@ class Base(DeclarativeBase):
 
 class ScrapeStatus(StrEnum):
     PENDING = "pending"
+    PROCESSING = "processing"
     DONE = "done"
 
 

@@ -28,14 +28,24 @@ class Database:
 
     async def fetch_pending(self, limit: int = 1000) -> list[str]:
         async with self._session_factory() as session:
-            query = (
-                select(ScraperQueue.isbn13)
-                .where(ScraperQueue.status == ScrapeStatus.PENDING)
-                .limit(limit)
-                .with_for_update(skip_locked=True)
-            )
-            result = await session.scalars(query)
-            return list(result)
+            async with session.begin():
+                query = (
+                    select(ScraperQueue.isbn13)
+                    .where(ScraperQueue.status == ScrapeStatus.PENDING)
+                    .limit(limit)
+                    .with_for_update(skip_locked=True)
+                )
+                result = await session.scalars(query)
+                batch = list(result)
+
+                if batch:
+                    await session.execute(
+                        update(ScraperQueue)
+                        .where(ScraperQueue.isbn13.in_(batch))
+                        .values(status=ScrapeStatus.PROCESSING)
+                    )
+
+            return batch
 
     async def mark_done(self, isbns: list[str]) -> None:
         if not isbns:
