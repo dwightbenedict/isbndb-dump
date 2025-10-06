@@ -10,29 +10,41 @@ from isbndb.schema import Book
 
 
 def parse_books(data: dict[str, Any]) -> list[Book]:
-    return [
-        Book(
-            title=book["title"],
-            long_title=book["title_long"],
-            authors=", ".join(book["authors"]),
-            publisher=book["publisher"],
-            date_published=book["date_published"],
-            synopsis=book["synopsis"],
-            language=book["language"],
-            subjects=", ".join(book["subjects"]),
-            edition=book["edition"],
-            isbn=book["isbn"],
-            isbn10=book["isbn10"],
-            isbn13=book["isbn13"],
-            dewey_decimal=", ".join(book["dewey_decimal"]),
-            cover=book["image_original"],
-            binding=book["binding"],
-            dimensions=book["dimensions"],
-            pages=book["pages"],
-            msrp=book["msrp"],
+    books: list[Book] = []
+
+    for book in data.get("data", []):
+        books.append(
+            Book(
+                isbn13=book.get("isbn13") or "",
+                title=book.get("title") or "",
+                long_title=book.get("title_long") or book.get("title") or "",
+                authors=", ".join(book.get("authors") or []),
+                publisher=book.get("publisher") or "",
+                date_published=book.get("date_published") or "",
+                synopsis=book.get("synopsis") or "",
+                language=book.get("language") or "",
+                subjects=", ".join(book.get("subjects") or []),
+                edition=book.get("edition") or "",
+                isbn=book.get("isbn") or "",
+                isbn10=book.get("isbn10") or "",
+                dewey_decimal=", ".join(book.get("dewey_decimal") or []),
+                cover=book.get("image_original") or "",
+                binding=book.get("binding") or "",
+                dimensions=book.get("dimensions") or "",
+                pages=(
+                    int(book["pages"])
+                    if isinstance(book.get("pages"), (int, str)) and str(book["pages"]).isdigit()
+                    else 0
+                ),
+                msrp=(
+                    float(book["msrp"])
+                    if isinstance(book.get("msrp"), (int, float, str)) and str(book["msrp"]).replace(".", "", 1).isdigit()
+                    else 0.0
+                ),
+            )
         )
-        for book in data["data"]
-    ]
+
+    return books
 
 
 def _append_books(data: dict[str, Any], out_file: Path) -> None:
