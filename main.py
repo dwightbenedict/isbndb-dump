@@ -83,7 +83,7 @@ async def consume_batches(db: Database, out_dir: Path) -> None:
     total_pending = await db.count_pending()
 
     async with httpx.AsyncClient(http2=True, timeout=60) as client:
-        with tqdm(total=total_pending, desc="Processing ISBNs", unit="isbn") as progress:
+        with tqdm(total=total_pending, desc="Processing ISBNs", unit="isbn") as pbar:
             while True:
                 if state["calls"] >= MAX_CALLS_PER_DAY:
                     sleep_time = seconds_until_midnight_utc()
@@ -97,7 +97,7 @@ async def consume_batches(db: Database, out_dir: Path) -> None:
                     logging.info("✅ No more pending ISBNs.")
                     break
 
-                await process_batch(db, client, batch, out_dir)
+                await process_batch(db, client, batch, out_dir, pbar)
                 state["calls"] += 1
                 save_state(state)
                 await asyncio.sleep(1 / MAX_CALLS_PER_SEC)
