@@ -52,25 +52,25 @@ def save_state(state: dict[str, Any]) -> None:
 
 
 async def process_batch(
-        db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path, pbar: tqdm
-) -> None:
+        db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path
+) -> int:
     try:
         data: dict[str, Any] = await fetch_books(client, batch, ISBNDB_API_KEY)
     except (httpx.RequestError, httpx.HTTPStatusError) as e:
         logging.warning(f"Batch {batch[0]}–{batch[-1]} failed: {e}")
-        return
+        return 0
     except Exception as e:
         logging.exception(f"Unexpected error on batch {batch[0]}–{batch[-1]}: {e}")
-        return
+        return 0
 
     books = parse_books(data)
     if not books:
-        return
+        return 0
 
     await archive_books(data, out_dir)
     await db.insert_books(books)
     await db.mark_done(batch)
-    pbar.update(len(books))
+    return len(books)
 
 
 async def consume_batches(db: Database, out_dir: Path) -> None:
@@ -97,9 +97,10 @@ async def consume_batches(db: Database, out_dir: Path) -> None:
                     logging.info("✅ No more pending ISBNs.")
                     break
 
-                await process_batch(db, client, batch, out_dir, pbar)
+                num_results = await process_batch(db, client, batch, out_dir)
                 state["calls"] += 1
                 save_state(state)
+                pbar.update(num_results)
                 await asyncio.sleep(1 / MAX_CALLS_PER_SEC)
 
 
