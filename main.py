@@ -15,7 +15,7 @@ from config import DB_URL, ISBNDB_API_KEY
 
 
 BATCH_SIZE = 1000
-MAX_CALLS_PER_SEC = 10
+MAX_CALLS_PER_SEC = 5
 MAX_CALLS_PER_DAY = 200_000
 
 DOWNLOADS_FOLDER = Path.home() / "Downloads"
@@ -52,25 +52,25 @@ def save_state(state: dict[str, Any]) -> None:
 
 
 async def process_batch(
-        db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path
-) -> bool:
+        db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path, pbar: tqdm
+) -> None:
     try:
         data: dict[str, Any] = await fetch_books(client, batch, ISBNDB_API_KEY)
     except (httpx.RequestError, httpx.HTTPStatusError) as e:
         logging.warning(f"Batch {batch[0]}–{batch[-1]} failed: {e}")
-        return False
+        return
     except Exception as e:
         logging.exception(f"Unexpected error on batch {batch[0]}–{batch[-1]}: {e}")
-        return False
+        return
 
     books = parse_books(data)
     if not books:
-        return False
+        return
 
     await archive_books(data, out_dir)
     await db.insert_books(books)
     await db.mark_done(batch)
-    return True
+    pbar.update(len(books))
 
 
 async def consume_batches(db: Database, out_dir: Path) -> None:
@@ -97,13 +97,9 @@ async def consume_batches(db: Database, out_dir: Path) -> None:
                     logging.info("✅ No more pending ISBNs.")
                     break
 
-                success = await process_batch(db, client, batch, out_dir)
+                await process_batch(db, client, batch, out_dir)
                 state["calls"] += 1
                 save_state(state)
-
-                if success:
-                    progress.update(len(batch))
-
                 await asyncio.sleep(1 / MAX_CALLS_PER_SEC)
 
 

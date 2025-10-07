@@ -7,47 +7,33 @@ import asyncio
 import orjson
 
 from isbndb.schema import Book
+from isbndb.utils import sanitize_str, sanitize_int, sanitize_float
 
 
 def parse_books(data: dict[str, Any]) -> list[Book]:
-    books: list[Book] = []
-
-    for book in data.get("data", []):
-        dim = book.get("dimensions")
-        dimensions = ", ".join(dim) if isinstance(dim, list) else str(dim or "")
-
-        books.append(
-            Book(
-                isbn13=book.get("isbn13") or "",
-                title=book.get("title") or "",
-                long_title=book.get("title_long") or book.get("title") or "",
-                authors=", ".join(book.get("authors") or []),
-                publisher=book.get("publisher") or "",
-                date_published=book.get("date_published") or "",
-                synopsis=book.get("synopsis") or "",
-                language=book.get("language") or "",
-                subjects=", ".join(book.get("subjects") or []),
-                edition=str(book["edition"]) if book.get("edition") else "",
-                isbn=book.get("isbn") or "",
-                isbn10=book.get("isbn10") or "",
-                dewey_decimal=", ".join(book.get("dewey_decimal") or []),
-                cover=book.get("image_original") or "",
-                binding=book.get("binding") or "",
-                dimensions=dimensions,
-                pages=(
-                    int(book["pages"])
-                    if isinstance(book.get("pages"), (int, str)) and str(book["pages"]).isdigit()
-                    else 0
-                ),
-                msrp=(
-                    float(book["msrp"])
-                    if isinstance(book.get("msrp"), (int, float, str)) and str(book["msrp"]).replace(".", "", 1).isdigit()
-                    else 0.0
-                ),
-            )
+    return [
+        Book(
+            isbn13=sanitize_str(book.get("isbn13")),
+            title=sanitize_str(book.get("title")),
+            long_title=sanitize_str(book.get("title_long")),
+            authors=sanitize_str(book.get("authors")),
+            publisher=sanitize_str(book.get("publisher")),
+            date_published=sanitize_str(book.get("date_published")),
+            synopsis=sanitize_str(book.get("synopsis")),
+            language=sanitize_str(book.get("language")),
+            subjects=sanitize_str(book.get("subjects")),
+            edition=sanitize_str(book.get("edition")),
+            isbn=sanitize_str(book.get("isbn")),
+            isbn10=sanitize_str(book.get("isbn10")),
+            dewey_decimal=sanitize_str(book.get("dewey_decimal")),
+            cover=sanitize_str(book.get("image_original")),
+            binding=sanitize_str(book.get("binding")),
+            dimensions=sanitize_str(book.get("dimensions")),
+            pages=sanitize_int(book.get("pages")),
+            msrp=sanitize_float(book.get("msrp")),
         )
-
-    return books
+        for book in data.get("data", [])
+    ]
 
 
 def _append_books(data: dict[str, Any], out_file: Path) -> None:
