@@ -115,8 +115,9 @@ async def main() -> None:
     logging.info("Starting to dump ISBNdb...")
 
     db = Database(DB_URL)
-    await consume_batches(db, ISBNDB_DUMP_DIR)
+    await db.rollback_processing()
 
+    await consume_batches(db, ISBNDB_DUMP_DIR)
     logging.info("All ISBNs scraped. Shutting down gracefully.")
 
 

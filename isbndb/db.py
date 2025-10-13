@@ -20,6 +20,15 @@ class Database:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
+    async def rollback_processing(self) -> None:
+        async with self._session_factory() as session:
+            async with session.begin():
+                await session.execute(
+                    update(ScraperQueue)
+                    .where(ScraperQueue.status == ScrapeStatus.PROCESSING)
+                    .values(status=ScrapeStatus.PENDING)
+                )
+
     async def count_pending(self) -> int:
         async with self._session_factory() as session:
             query = select(func.count()).where(ScraperQueue.status == ScrapeStatus.PENDING)
