@@ -9,6 +9,7 @@ import httpx
 from tqdm import tqdm
 
 from isbndb.api import fetch_books
+from isbndb.exceptions import DailyQuotaExceeded, RateLimitExceeded
 from isbndb.ingest import parse_books, archive_books
 from isbndb.db import Database
 from config import DB_URL, ISBNDB_API_KEY
@@ -17,6 +18,7 @@ from config import DB_URL, ISBNDB_API_KEY
 BATCH_SIZE = 1000
 MAX_CALLS_PER_SEC = 5
 MAX_CALLS_PER_DAY = 200_000
+MANUAL_THROTTLE_SEC = 60
 
 DOWNLOADS_FOLDER = Path.home() / "Downloads"
 ISBNDB_DUMP_DIR = DOWNLOADS_FOLDER / "isbndb_dump"
@@ -51,23 +53,22 @@ def save_state(state: dict[str, Any]) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=4), encoding="utf-8")
 
 
-async def process_batch(
-        db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path
-) -> int:
-    try:
-        data: dict[str, Any] = await fetch_books(client, batch, ISBNDB_API_KEY)
-    except (httpx.RequestError, httpx.HTTPStatusError) as e:
-        logging.warning(f"Batch {batch[0]}–{batch[-1]} failed: {e}")
-        return 0
-    except Exception as e:
-        logging.exception(f"Unexpected error on batch {batch[0]}–{batch[-1]}: {e}")
-        return 0
+async def wait_for_reset() -> None:
+    sleep_time = seconds_until_midnight_utc()
+    logging.info(f"🕒 Daily quota reached. Sleeping {sleep_time / 3600:.2f}h until reset (00:00 UTC).")
+    await asyncio.sleep(sleep_time)
+    state = {"date": datetime.now(timezone.utc).date().isoformat(), "calls": 0}
+    save_state(state)
 
-    books = parse_books(data)
+
+async def process_batch(db: Database, client: httpx.AsyncClient, batch: list[str], out_dir: Path) -> int:
+    books_raw = await fetch_books(client, batch, ISBNDB_API_KEY)
+    books = parse_books(books_raw)
+
     if not books:
         return 0
 
-    await archive_books(data, out_dir)
+    await archive_books(books_raw, out_dir)
     await db.insert_books(books)
     await db.mark_done(batch)
     return len(books)
@@ -86,18 +87,23 @@ async def consume_batches(db: Database, out_dir: Path) -> None:
         with tqdm(total=total_pending, desc="Processing ISBNs", unit="isbn") as pbar:
             while True:
                 if state["calls"] >= MAX_CALLS_PER_DAY:
-                    sleep_time = seconds_until_midnight_utc()
-                    logging.info(f"🕒 Daily quota reached. Sleeping {sleep_time / 3600:.2f}h until reset (00:00 UTC).")
-                    await asyncio.sleep(sleep_time)
-                    state = {"date": datetime.now(timezone.utc).date().isoformat(), "calls": 0}
-                    save_state(state)
+                    await wait_for_reset()
 
                 batch = await db.fetch_pending(limit=BATCH_SIZE)
                 if not batch:
-                    logging.info("✅ No more pending ISBNs.")
+                    logging.info("No more pending ISBNs.")
                     break
 
-                num_results = await process_batch(db, client, batch, out_dir)
+                try:
+                    num_results = await process_batch(db, client, batch, out_dir)
+                except RateLimitExceeded:
+                    logging.warning(f"Rate limit exceeded — backing off for {MANUAL_THROTTLE_SEC} seconds...")
+                    await asyncio.sleep(MANUAL_THROTTLE_SEC)
+                    continue
+                except DailyQuotaExceeded:
+                    await wait_for_reset()
+                    continue
+
                 state["calls"] += 1
                 save_state(state)
                 pbar.update(num_results)
@@ -106,12 +112,12 @@ async def consume_batches(db: Database, out_dir: Path) -> None:
 
 async def main() -> None:
     setup_logging()
-    logging.info("🚀 Starting ISBNdb sequential consumer service...")
+    logging.info("Starting to dump ISBNdb...")
 
     db = Database(DB_URL)
     await consume_batches(db, ISBNDB_DUMP_DIR)
 
-    logging.info("🏁 All ISBNs processed. Shutting down gracefully.")
+    logging.info("All ISBNs scraped. Shutting down gracefully.")
 
 
 if __name__ == "__main__":
