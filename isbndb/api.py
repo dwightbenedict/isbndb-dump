@@ -6,7 +6,7 @@ from isbndb.exceptions import RateLimitExceeded, DailyQuotaExceeded
 
 
 async def fetch_books(client: httpx.AsyncClient, isbns: list[str], api_key: str) -> dict[str, Any]:
-    url = "https://api.enterprise.isbndb.com/books"
+    url = "https://api2.isbndb.com/books"
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:143.0) Gecko/20100101 Firefox/143.0",
         "Authorization": api_key,
